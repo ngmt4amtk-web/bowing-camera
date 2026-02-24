@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>ボーイングカメラ</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <h1 class="header-title">ボーイングカメラ</h1>
+      <button id="start-btn" class="start-btn">
+        <span id="start-icon">▶</span>
+        <span id="start-text">開始</span>
+      </button>
+    </header>
+
+    <!-- Camera -->
+    <section class="camera-section">
+      <video id="video" class="camera-video mirror" autoplay playsinline></video>
+      <canvas id="overlay" class="camera-overlay mirror"></canvas>
+      <div id="camera-status" class="camera-status">
+        開始ボタンを押してください
+      </div>
+      <div id="fps-badge" class="fps-badge">-- FPS</div>
+      <div id="delegate-badge" class="delegate-badge"></div>
+    </section>
+
+    <!-- Metrics -->
+    <section class="metrics-section">
+      <!-- M1: 弓の直線性 -->
+      <div class="metric-card" id="card-straightness">
+        <div class="metric-label">弓の直線性</div>
+        <div class="metric-value" id="val-straightness">--</div>
+        <div class="metric-sub" id="sub-straightness">ストローク検出待ち</div>
+      </div>
+
+      <!-- M2: 弓の配分 -->
+      <div class="metric-card" id="card-distribution">
+        <div class="metric-label">弓の配分</div>
+        <div class="metric-value" id="val-distribution">--</div>
+        <div class="bow-dist-bar">
+          <div class="bow-dist-tip" id="dist-tip" style="width:33%"></div>
+          <div class="bow-dist-mid" id="dist-mid" style="width:34%"></div>
+          <div class="bow-dist-frog" id="dist-frog" style="width:33%"></div>
+        </div>
+        <div class="bow-dist-labels">
+          <span>先弓</span><span>中弓</span><span>元弓</span>
+        </div>
+      </div>
+
+      <!-- M3: 肘の高さ -->
+      <div class="metric-card" id="card-elbow">
+        <div class="metric-label">肘の高さ</div>
+        <div class="metric-value" id="val-elbow">--</div>
+        <div class="metric-sub" id="sub-elbow"></div>
+      </div>
+
+      <!-- M4: 肩の緊張 -->
+      <div class="metric-card" id="card-shoulder">
+        <div class="metric-label">肩の緊張</div>
+        <div class="metric-value" id="val-shoulder">--</div>
+        <div class="metric-sub" id="sub-shoulder"></div>
+      </div>
+    </section>
+
+    <!-- Advice -->
+    <section class="advice-section">
+      <div class="advice-header">アドバイス</div>
+      <p class="advice-text" id="advice-text">カメラを起動して演奏してみましょう</p>
+    </section>
+  </div>
+
+  <script src="bow-metrics.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
