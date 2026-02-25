@@ -15,10 +15,18 @@
     <!-- Header -->
     <header class="header">
       <h1 class="header-title">ボーイングカメラ</h1>
-      <button id="start-btn" class="start-btn">
-        <span id="start-icon">▶</span>
-        <span id="start-text">開始</span>
-      </button>
+      <div class="header-controls">
+        <button id="camera-toggle-btn" class="icon-btn" title="カメラ切替">
+          <span id="camera-toggle-icon">🤳</span>
+        </button>
+        <button id="diagnose-btn" class="diagnose-btn" title="15秒診断">
+          <span>診断</span>
+        </button>
+        <button id="start-btn" class="start-btn">
+          <span id="start-icon">▶</span>
+          <span id="start-text">開始</span>
+        </button>
+      </div>
     </header>
 
     <!-- Camera -->
@@ -30,6 +38,17 @@
       </div>
       <div id="fps-badge" class="fps-badge">-- FPS</div>
       <div id="delegate-badge" class="delegate-badge"></div>
+      <!-- 診断カウントダウン -->
+      <div id="diagnose-countdown" class="diagnose-countdown hidden">
+        <div class="diagnose-countdown-ring">
+          <svg viewBox="0 0 100 100">
+            <circle class="ring-bg" cx="50" cy="50" r="44" />
+            <circle id="ring-progress" class="ring-fg" cx="50" cy="50" r="44" />
+          </svg>
+          <span id="countdown-num" class="countdown-num">15</span>
+        </div>
+        <div class="diagnose-countdown-label">診断中...</div>
+      </div>
     </section>
 
     <!-- Metrics -->
@@ -75,6 +94,15 @@
       <div class="advice-header">アドバイス</div>
       <p class="advice-text" id="advice-text">カメラを起動して演奏してみましょう</p>
     </section>
+
+    <!-- 診断結果モーダル -->
+    <div id="diagnose-modal" class="diagnose-modal hidden">
+      <div class="diagnose-modal-content">
+        <h2 class="diagnose-modal-title">15秒診断レポート</h2>
+        <div id="diagnose-results" class="diagnose-results"></div>
+        <button id="diagnose-close-btn" class="diagnose-close-btn">閉じる</button>
+      </div>
+    </div>
   </div>
 
   <script src="bow-metrics.js"></script>

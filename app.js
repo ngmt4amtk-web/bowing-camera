@@ -46,6 +46,15 @@ const startText = $('start-text');
 const cameraStatus = $('camera-status');
 const fpsBadge = $('fps-badge');
 const delegateBadge = $('delegate-badge');
+const cameraToggleBtn = $('camera-toggle-btn');
+const cameraToggleIcon = $('camera-toggle-icon');
+const diagnoseBtn = $('diagnose-btn');
+const diagnoseCountdown = $('diagnose-countdown');
+const ringProgress = $('ring-progress');
+const countdownNum = $('countdown-num');
+const diagnoseModal = $('diagnose-modal');
+const diagnoseResults = $('diagnose-results');
+const diagnoseCloseBtn = $('diagnose-close-btn');
 
 const cardStraightness = $('card-straightness');
 const cardDistribution = $('card-distribution');
@@ -66,6 +75,7 @@ const adviceText = $('advice-text');
 // ── State ──
 const state = {
   isRunning: false,
+  facingMode: 'user',     // 'user' = 内カメ, 'environment' = 外カメ
   wristTrail: [],         // [{x, y, t}] 直近60フレーム
   bowDistribution: { tip: 0, middle: 0, frog: 0 },
   bowDistResetTime: 0,
@@ -79,6 +89,12 @@ const state = {
 
   // 現在のメトリクス
   currentMetrics: {},
+
+  // 診断モード
+  diagnosing: false,
+  diagnoseStartTime: 0,
+  diagnoseTimerId: null,
+  diagnoseLog: [],        // 各フレームのメトリクスを蓄積
 };
 
 let poseLandmarker = null;
@@ -91,6 +107,9 @@ let delegate = '';
 
 // ── Init ──
 startBtn.addEventListener('click', toggleRunning);
+cameraToggleBtn.addEventListener('click', toggleCamera);
+diagnoseBtn.addEventListener('click', toggleDiagnose);
+diagnoseCloseBtn.addEventListener('click', () => diagnoseModal.classList.add('hidden'));
 
 async function toggleRunning() {
   if (state.isRunning) {
@@ -180,6 +199,23 @@ async function initPoseLandmarker() {
   delegateBadge.textContent = delegate;
 }
 
+// ── Camera Toggle ──
+async function toggleCamera() {
+  state.facingMode = state.facingMode === 'user' ? 'environment' : 'user';
+  updateCameraIcon();
+  if (state.isRunning) {
+    await startCamera();
+  }
+}
+
+function updateCameraIcon() {
+  const isInner = state.facingMode === 'user';
+  cameraToggleIcon.textContent = isInner ? '🤳' : '📷';
+  // ミラー: 内カメのみ
+  video.classList.toggle('mirror', isInner);
+  overlay.classList.toggle('mirror', isInner);
+}
+
 // ── Camera ──
 async function startCamera() {
   if (stream) {
@@ -187,10 +223,11 @@ async function startCamera() {
   }
   cameraStatus.textContent = 'カメラを起動中...';
   stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+    video: { facingMode: state.facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
     audio: false,
   });
   video.srcObject = stream;
+  updateCameraIcon();
 
   await new Promise(resolve => {
     video.addEventListener('loadeddata', resolve, { once: true });
@@ -282,6 +319,22 @@ function processFrame(lm, ts) {
         state.baseShoulderEarDist, shoulderTension.currentDist, 0.3
       );
     }
+  }
+
+  // 診断モード: メトリクスを蓄積
+  if (state.diagnosing) {
+    state.diagnoseLog.push({
+      straightness: state.smoothStraightness !== null ? Math.round(state.smoothStraightness) : null,
+      straightnessStatus: straightness.status,
+      elbowHeight: state.smoothElbowHeight !== null ? Math.round(state.smoothElbowHeight * 100) / 100 : elbowHeight.relativeHeight,
+      elbowStatus: elbowHeight.status,
+      elbowLabel: elbowHeight.label,
+      shoulderTension: shoulderTension.tension,
+      shoulderStatus: shoulderTension.status,
+      shoulderLabel: shoulderTension.label,
+      bowZone: bowZone.zone,
+      bowAngle: bowZone.angle,
+    });
   }
 
   // メトリクスを保存
@@ -431,4 +484,190 @@ function drawBowTrail(w, h) {
     ctx.lineCap = 'round';
     ctx.stroke();
   }
+}
+
+// ── 15秒診断モード ──
+const DIAGNOSE_DURATION = 15;
+const RING_CIRCUMFERENCE = 2 * Math.PI * 44; // r=44
+
+function toggleDiagnose() {
+  if (state.diagnosing) {
+    cancelDiagnose();
+  } else {
+    startDiagnose();
+  }
+}
+
+async function startDiagnose() {
+  // カメラが動いていなければ先に起動
+  if (!state.isRunning) {
+    await start();
+    if (!state.isRunning) return; // 起動失敗
+  }
+
+  state.diagnosing = true;
+  state.diagnoseLog = [];
+  state.diagnoseStartTime = performance.now();
+
+  diagnoseBtn.classList.add('running');
+  diagnoseCountdown.classList.remove('hidden');
+  countdownNum.textContent = DIAGNOSE_DURATION;
+  ringProgress.style.strokeDasharray = RING_CIRCUMFERENCE;
+  ringProgress.style.strokeDashoffset = '0';
+
+  // 1秒ごとにカウントダウン更新
+  let remaining = DIAGNOSE_DURATION;
+  state.diagnoseTimerId = setInterval(() => {
+    remaining--;
+    if (remaining <= 0) {
+      finishDiagnose();
+    } else {
+      countdownNum.textContent = remaining;
+      const progress = (DIAGNOSE_DURATION - remaining) / DIAGNOSE_DURATION;
+      ringProgress.style.strokeDashoffset = (RING_CIRCUMFERENCE * progress).toFixed(1);
+    }
+  }, 1000);
+}
+
+function cancelDiagnose() {
+  state.diagnosing = false;
+  if (state.diagnoseTimerId) {
+    clearInterval(state.diagnoseTimerId);
+    state.diagnoseTimerId = null;
+  }
+  diagnoseBtn.classList.remove('running');
+  diagnoseCountdown.classList.add('hidden');
+}
+
+function finishDiagnose() {
+  cancelDiagnose();
+  showDiagnoseReport(state.diagnoseLog);
+}
+
+function showDiagnoseReport(log) {
+  if (log.length === 0) {
+    diagnoseResults.innerHTML = '<p style="text-align:center;color:var(--text-dim)">ポーズが検出できませんでした。<br>カメラに全身が映るように調整してください。</p>';
+    diagnoseModal.classList.remove('hidden');
+    return;
+  }
+
+  // 集計
+  const validStraightness = log.filter(l => l.straightness !== null).map(l => l.straightness);
+  const avgStraightness = validStraightness.length > 0
+    ? Math.round(validStraightness.reduce((a, b) => a + b, 0) / validStraightness.length)
+    : null;
+
+  const avgElbow = Math.round(log.reduce((a, l) => a + l.elbowHeight, 0) / log.length * 100) / 100;
+
+  const validTension = log.filter(l => l.shoulderTension > 0).map(l => l.shoulderTension);
+  const avgTension = validTension.length > 0
+    ? Math.round(validTension.reduce((a, b) => a + b, 0) / validTension.length)
+    : 0;
+  const maxTension = validTension.length > 0 ? Math.max(...validTension) : 0;
+
+  // 弓配分
+  const zoneCounts = { tip: 0, middle: 0, frog: 0 };
+  log.forEach(l => zoneCounts[l.bowZone]++);
+  const totalZone = zoneCounts.tip + zoneCounts.middle + zoneCounts.frog;
+  const tipPct = Math.round(zoneCounts.tip / totalZone * 100);
+  const frogPct = Math.round(zoneCounts.frog / totalZone * 100);
+  const midPct = 100 - tipPct - frogPct;
+
+  // ステータス判定
+  const straightStatus = avgStraightness === null ? 'good'
+    : avgStraightness >= 85 ? 'good'
+    : avgStraightness >= 65 ? 'warn' : 'bad';
+
+  const elbowStatus = avgElbow < -0.1 ? 'warn'
+    : avgElbow > 0.45 ? 'bad'
+    : avgElbow > 0.3 ? 'warn' : 'good';
+
+  const shoulderStatus = maxTension > 25 ? 'bad'
+    : avgTension > 15 ? 'warn' : 'good';
+
+  // 弓配分ステータス
+  const maxZone = Math.max(tipPct, midPct, frogPct);
+  const minZone = Math.min(tipPct, midPct, frogPct);
+  const distStatus = (maxZone - minZone) < 20 ? 'good'
+    : (maxZone - minZone) < 35 ? 'warn' : 'bad';
+
+  // 総合スコア（各100点満点を加重平均）
+  const scores = [];
+  if (avgStraightness !== null) scores.push({ s: avgStraightness, w: 3 });
+  scores.push({ s: elbowStatus === 'good' ? 90 : elbowStatus === 'warn' ? 60 : 30, w: 2 });
+  scores.push({ s: shoulderStatus === 'good' ? 95 : shoulderStatus === 'warn' ? 60 : 30, w: 2 });
+  scores.push({ s: distStatus === 'good' ? 90 : distStatus === 'warn' ? 65 : 35, w: 1 });
+  const totalW = scores.reduce((a, s) => a + s.w, 0);
+  const overall = Math.round(scores.reduce((a, s) => a + s.s * s.w, 0) / totalW);
+  const overallStatus = overall >= 80 ? 'good' : overall >= 60 ? 'warn' : 'bad';
+
+  const overallComment = overall >= 85 ? '素晴らしいフォームです！この調子で練習を続けましょう。'
+    : overall >= 70 ? '基本は良好です。下のポイントを意識するとさらに良くなります。'
+    : overall >= 50 ? 'いくつか改善ポイントがあります。ゆっくり練習して修正しましょう。'
+    : 'フォームに課題があります。鏡を見ながら1つずつ直していきましょう。';
+
+  // 弓配分ラベル
+  let distLabel = '全弓';
+  if (maxZone >= 50) {
+    if (tipPct === maxZone) distLabel = '先弓寄り';
+    else if (frogPct === maxZone) distLabel = '元弓寄り';
+    else distLabel = '中弓中心';
+  }
+
+  // 肘ラベル
+  const elbowLabel = avgElbow < -0.1 ? '高すぎ'
+    : avgElbow > 0.45 ? '低すぎ'
+    : avgElbow > 0.3 ? 'やや低い' : '適正';
+
+  // HTML生成
+  let html = '';
+
+  // 総合スコア
+  html += `<div class="diagnose-overall">
+    <div class="diagnose-overall-score" style="color:var(--${overallStatus})">${overall}点</div>
+    <div class="diagnose-overall-label">総合スコア</div>
+    <div class="diagnose-overall-comment">${overallComment}</div>
+  </div>`;
+
+  // 弓の直線性
+  html += `<div class="diagnose-item ${straightStatus}">
+    <div class="diagnose-item-label">弓の直線性</div>
+    <div class="diagnose-item-value">${avgStraightness !== null ? avgStraightness + '%' : '検出不足'}</div>
+    <div class="diagnose-item-detail">${
+      straightStatus === 'good' ? '弓がまっすぐ引けています' :
+      straightStatus === 'warn' ? 'やや曲がりが見られます。弦と直角を意識しましょう' :
+      '弓が曲がっています。弓先の方向に注意してください'
+    }</div>
+  </div>`;
+
+  // 弓の配分
+  html += `<div class="diagnose-item ${distStatus}">
+    <div class="diagnose-item-label">弓の配分</div>
+    <div class="diagnose-item-value">${distLabel}</div>
+    <div class="diagnose-item-detail">先弓${tipPct}% / 中弓${midPct}% / 元弓${frogPct}%</div>
+  </div>`;
+
+  // 肘の高さ
+  html += `<div class="diagnose-item ${elbowStatus}">
+    <div class="diagnose-item-label">肘の高さ</div>
+    <div class="diagnose-item-value">${elbowLabel}</div>
+    <div class="diagnose-item-detail">${
+      elbowStatus === 'good' ? '肘の高さは適正です' :
+      elbowLabel === '高すぎ' ? '肘が上がりすぎです。力まず自然な高さに' :
+      elbowLabel === '低すぎ' ? '肘が下がりすぎです。弦の高さに合わせましょう' :
+      '肘をもう少し上げてみましょう'
+    }</div>
+  </div>`;
+
+  // 肩の緊張
+  html += `<div class="diagnose-item ${shoulderStatus}">
+    <div class="diagnose-item-label">肩の緊張</div>
+    <div class="diagnose-item-value">${shoulderStatus === 'good' ? 'リラックス' : shoulderStatus === 'warn' ? '少し力み' : '力んでいます'}</div>
+    <div class="diagnose-item-detail">平均${avgTension}% / 最大${maxTension}%${
+      shoulderStatus !== 'good' ? '　息を吐いて肩を落としましょう' : ''
+    }</div>
+  </div>`;
+
+  diagnoseResults.innerHTML = html;
+  diagnoseModal.classList.remove('hidden');
 }

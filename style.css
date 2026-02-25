@@ -45,6 +45,53 @@ body {
   letter-spacing: 0.02em;
 }
 
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--card-border);
+  border-radius: 50%;
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: opacity 0.2s, background 0.2s;
+}
+.icon-btn:active { opacity: 0.7; }
+.icon-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.diagnose-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, background 0.2s;
+}
+.diagnose-btn:active { opacity: 0.7; }
+.diagnose-btn.running {
+  background: #e67e22;
+  border-color: #e67e22;
+  color: #fff;
+}
+
 .start-btn {
   display: flex;
   align-items: center;
@@ -221,6 +268,167 @@ body {
   line-height: 1.5;
   min-height: 1.5em;
 }
+
+/* ── Diagnose Countdown ── */
+.diagnose-countdown {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 10;
+  pointer-events: none;
+}
+.diagnose-countdown.hidden { display: none; }
+
+.diagnose-countdown-ring {
+  position: relative;
+  width: 90px;
+  height: 90px;
+}
+.diagnose-countdown-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.ring-bg {
+  fill: none;
+  stroke: rgba(255,255,255,0.15);
+  stroke-width: 6;
+}
+.ring-fg {
+  fill: none;
+  stroke: #e67e22;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-dasharray: 276.46;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.1s linear;
+}
+.countdown-num {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+}
+.diagnose-countdown-label {
+  font-size: 0.85rem;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+  font-weight: 600;
+}
+
+/* ── Diagnose Modal ── */
+.diagnose-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  padding: 16px;
+}
+.diagnose-modal.hidden { display: none; }
+
+.diagnose-modal-content {
+  width: 100%;
+  max-width: 400px;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.diagnose-modal-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.diagnose-results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.diagnose-item {
+  background: rgba(255,255,255,0.03);
+  border-radius: 10px;
+  padding: 12px;
+  border-left: 3px solid var(--card-border);
+}
+.diagnose-item.good { border-left-color: var(--good); }
+.diagnose-item.warn { border-left-color: var(--warn); }
+.diagnose-item.bad { border-left-color: var(--bad); }
+
+.diagnose-item-label {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.diagnose-item-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+.diagnose-item-detail {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.diagnose-overall {
+  background: rgba(255,255,255,0.05);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+  margin-bottom: 4px;
+}
+.diagnose-overall-score {
+  font-size: 2rem;
+  font-weight: 700;
+}
+.diagnose-overall-label {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.diagnose-overall-comment {
+  font-size: 0.9rem;
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.diagnose-close-btn {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.diagnose-close-btn:active { opacity: 0.7; }
 
 /* ── Responsive ── */
 @media (min-width: 480px) {
