@@ -120,13 +120,23 @@ const BowMetrics = (() => {
   // ── M2: 弓の配分 ──
 
   function computeBowZone(shoulder, elbow, wrist) {
-    const angle = angleBetween3(shoulder, elbow, wrist);
-    let zone;
-    if (angle <= 100) zone = 'frog';       // 元弓
-    else if (angle <= 145) zone = 'middle'; // 中弓
-    else zone = 'tip';                       // 先弓
+    // 腕全体の長さ（上腕+前腕）
+    const upperArm = distance(shoulder, elbow);
+    const forearm = distance(elbow, wrist);
+    const armLength = upperArm + forearm;
+    if (armLength < 0.01) return { zone: 'middle', extensionRatio: 0.5 };
 
-    return { zone, angle: Math.round(angle) };
+    // 手首と肩の直線距離 / 腕全長 = 腕の伸び具合
+    const wristShoulderDist = distance(shoulder, wrist);
+    const extensionRatio = wristShoulderDist / armLength;
+
+    // 伸び具合で判定（0=完全に畳む=元弓、1=完全に伸ばす=先弓）
+    let zone;
+    if (extensionRatio < 0.55) zone = 'frog';       // 元弓（腕が畳まれている）
+    else if (extensionRatio < 0.78) zone = 'middle'; // 中弓
+    else zone = 'tip';                                // 先弓（腕が伸びている）
+
+    return { zone, extensionRatio: Math.round(extensionRatio * 100) / 100 };
   }
 
   function computeDistributionPercent(dist) {
@@ -169,16 +179,16 @@ const BowMetrics = (() => {
 
     const relativeHeight = shoulderElbowDy / bodyScale;
 
-    // 理想範囲: -0.1 ~ 0.3（肩から下に0〜30%の範囲）
+    // 理想範囲: -0.15 ~ 0.35（弦により変動するため広めに取る）
     let status = 'good';
     let label;
-    if (relativeHeight < -0.1) {
+    if (relativeHeight < -0.15) {
       status = 'warn';
       label = '高すぎ';
-    } else if (relativeHeight > 0.45) {
+    } else if (relativeHeight > 0.5) {
       status = 'bad';
       label = '低すぎ';
-    } else if (relativeHeight > 0.3) {
+    } else if (relativeHeight > 0.35) {
       status = 'warn';
       label = 'やや低い';
     } else {

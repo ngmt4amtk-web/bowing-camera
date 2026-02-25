@@ -66,9 +66,15 @@ body {
   transition: opacity 0.2s, background 0.2s;
 }
 .icon-btn:active { opacity: 0.7; }
+.icon-btn.hidden { display: none; }
 .icon-btn.active {
   background: var(--accent);
   border-color: var(--accent);
+}
+
+.calibrate-btn.calibrated {
+  background: var(--good);
+  border-color: var(--good);
 }
 
 .diagnose-btn {

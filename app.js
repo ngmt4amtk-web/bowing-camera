@@ -48,6 +48,7 @@ const fpsBadge = $('fps-badge');
 const delegateBadge = $('delegate-badge');
 const cameraToggleBtn = $('camera-toggle-btn');
 const cameraToggleIcon = $('camera-toggle-icon');
+const calibrateBtn = $('calibrate-btn');
 const diagnoseBtn = $('diagnose-btn');
 const diagnoseCountdown = $('diagnose-countdown');
 const ringProgress = $('ring-progress');
@@ -80,7 +81,7 @@ const state = {
   bowDistribution: { tip: 0, middle: 0, frog: 0 },
   bowDistResetTime: 0,
   baseShoulderEarDist: null,
-  calibrationFrames: 0,
+  lastShoulderEarDist: null,
 
   // smoothed values
   smoothStraightness: null,
@@ -108,6 +109,7 @@ let delegate = '';
 // ── Init ──
 startBtn.addEventListener('click', toggleRunning);
 cameraToggleBtn.addEventListener('click', toggleCamera);
+calibrateBtn.addEventListener('click', calibrateShoulder);
 diagnoseBtn.addEventListener('click', toggleDiagnose);
 diagnoseCloseBtn.addEventListener('click', () => diagnoseModal.classList.add('hidden'));
 
@@ -131,14 +133,14 @@ async function start() {
     await startCamera();
     state.isRunning = true;
     state.baseShoulderEarDist = null;
-    state.calibrationFrames = 0;
     state.bowDistribution = { tip: 0, middle: 0, frog: 0 };
     state.bowDistResetTime = performance.now();
     state.wristTrail = [];
     startBtn.classList.add('running');
     startIcon.textContent = '⏹';
     startText.textContent = '停止';
-    cameraStatus.classList.add('hidden');
+    calibrateBtn.classList.remove('hidden');
+    cameraStatus.textContent = '🎯ボタンで構えた状態を記録';
     detectLoop();
   } catch (e) {
     cameraStatus.textContent = 'エラー: ' + e.message;
@@ -158,6 +160,7 @@ function stop() {
   startBtn.classList.remove('running');
   startIcon.textContent = '▶';
   startText.textContent = '開始';
+  calibrateBtn.classList.add('hidden');
   cameraStatus.textContent = '開始ボタンを押してください';
   cameraStatus.classList.remove('hidden');
 }
@@ -205,6 +208,19 @@ async function toggleCamera() {
   updateCameraIcon();
   if (state.isRunning) {
     await startCamera();
+  }
+}
+
+// ── Calibration ──
+function calibrateShoulder() {
+  if (state.lastShoulderEarDist && state.lastShoulderEarDist > 0) {
+    state.baseShoulderEarDist = state.lastShoulderEarDist;
+    calibrateBtn.classList.add('calibrated');
+    cameraStatus.textContent = '✅ キャリブレーション完了';
+    cameraStatus.classList.remove('hidden');
+    setTimeout(() => {
+      if (state.isRunning) cameraStatus.classList.add('hidden');
+    }, 1500);
   }
 }
 
@@ -306,26 +322,24 @@ function processFrame(lm, ts) {
     state.smoothElbowHeight, elbowHeight.relativeHeight, 0.1
   );
 
-  // M4: 肩の緊張（最初の30フレームでキャリブレーション）
+  // M4: 肩の緊張（手動キャリブレーション）
   const shoulderTension = BowMetrics.computeShoulderTension(
     rShoulder, rEar, lShoulder, lEar, state.baseShoulderEarDist
   );
-  if (state.calibrationFrames < 30) {
-    state.calibrationFrames++;
-    if (state.baseShoulderEarDist === null) {
-      state.baseShoulderEarDist = shoulderTension.currentDist;
-    } else {
-      state.baseShoulderEarDist = BowMetrics.ema(
-        state.baseShoulderEarDist, shoulderTension.currentDist, 0.3
-      );
-    }
-  }
+  // 最新の肩-耳距離を保持（キャリブレーションボタン用）
+  state.lastShoulderEarDist = shoulderTension.currentDist;
+
+  // スムージング後のスコアからステータスを再計算（Bug #1修正）
+  const smoothedScore = state.smoothStraightness;
+  const straightnessStatus = smoothedScore !== null
+    ? (smoothedScore >= 85 ? 'good' : smoothedScore >= 65 ? 'warn' : 'bad')
+    : 'good';
 
   // 診断モード: メトリクスを蓄積
   if (state.diagnosing) {
     state.diagnoseLog.push({
-      straightness: state.smoothStraightness !== null ? Math.round(state.smoothStraightness) : null,
-      straightnessStatus: straightness.status,
+      straightness: smoothedScore !== null ? Math.round(smoothedScore) : null,
+      straightnessStatus: straightnessStatus,
       elbowHeight: state.smoothElbowHeight !== null ? Math.round(state.smoothElbowHeight * 100) / 100 : elbowHeight.relativeHeight,
       elbowStatus: elbowHeight.status,
       elbowLabel: elbowHeight.label,
@@ -333,15 +347,16 @@ function processFrame(lm, ts) {
       shoulderStatus: shoulderTension.status,
       shoulderLabel: shoulderTension.label,
       bowZone: bowZone.zone,
-      bowAngle: bowZone.angle,
+      extensionRatio: bowZone.extensionRatio,
     });
   }
 
   // メトリクスを保存
+  const smoothedRound = smoothedScore !== null ? Math.round(smoothedScore) : null;
   state.currentMetrics = {
     straightness: {
-      score: state.smoothStraightness !== null ? Math.round(state.smoothStraightness) : null,
-      status: straightness.status,
+      score: smoothedRound,
+      status: straightnessStatus,
     },
     distribution,
     bowZone: bowZone,
@@ -351,7 +366,9 @@ function processFrame(lm, ts) {
         ? Math.round(state.smoothElbowHeight * 100) / 100
         : elbowHeight.relativeHeight,
     },
-    shoulder: shoulderTension,
+    shoulder: state.baseShoulderEarDist === null
+      ? { tension: 0, status: 'good', label: 'キャリブレーション待ち', currentDist: shoulderTension.currentDist }
+      : shoulderTension,
   };
 
   updateUI(state.currentMetrics);
@@ -376,7 +393,7 @@ function updateUI(m) {
 
   // M3: 肘
   valElbow.textContent = m.elbow.label;
-  subElbow.textContent = '肘角度 ' + m.bowZone.angle + '°';
+  subElbow.textContent = '相対高さ ' + m.elbow.relativeHeight + '（※弦により変動）';
   setCardStatus(cardElbow, m.elbow.status);
 
   // M4: 肩
@@ -578,9 +595,9 @@ function showDiagnoseReport(log) {
     : avgStraightness >= 85 ? 'good'
     : avgStraightness >= 65 ? 'warn' : 'bad';
 
-  const elbowStatus = avgElbow < -0.1 ? 'warn'
-    : avgElbow > 0.45 ? 'bad'
-    : avgElbow > 0.3 ? 'warn' : 'good';
+  const elbowStatus = avgElbow < -0.15 ? 'warn'
+    : avgElbow > 0.5 ? 'bad'
+    : avgElbow > 0.35 ? 'warn' : 'good';
 
   const shoulderStatus = maxTension > 25 ? 'bad'
     : avgTension > 15 ? 'warn' : 'good';
@@ -615,9 +632,9 @@ function showDiagnoseReport(log) {
   }
 
   // 肘ラベル
-  const elbowLabel = avgElbow < -0.1 ? '高すぎ'
-    : avgElbow > 0.45 ? '低すぎ'
-    : avgElbow > 0.3 ? 'やや低い' : '適正';
+  const elbowLabel = avgElbow < -0.15 ? '高すぎ'
+    : avgElbow > 0.5 ? '低すぎ'
+    : avgElbow > 0.35 ? 'やや低い' : '適正';
 
   // HTML生成
   let html = '';
